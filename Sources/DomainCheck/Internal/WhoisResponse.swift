@@ -183,9 +183,25 @@ enum WhoisResponse {
             guard keys.contains(name) else { continue }
 
             let value = parts[1].trimmingCharacters(in: .whitespaces)
-            if !value.isEmpty { return value }
+            if !value.isEmpty, !isRedacted(value) { return value }
         }
         return nil
+    }
+
+    /// Whether a value is a registry's placeholder rather than data.
+    ///
+    /// Since GDPR most registries answer contact and identifier fields with a
+    /// literal "REDACTED FOR PRIVACY". Reporting that as the registry ID is
+    /// worse than reporting nothing: it looks like data, so a caller stores
+    /// it, compares it, and eventually acts on it.
+    static func isRedacted(_ value: String) -> Bool {
+        let normalised = value.lowercased().trimmingCharacters(in: .whitespaces)
+        return normalised.hasPrefix("redacted")
+            || normalised.hasPrefix("not disclosed")
+            || normalised.hasPrefix("data redacted")
+            || normalised.hasPrefix("statutory masking enabled")
+            || normalised == "n/a"
+            || normalised == "-"
     }
 
     /// Every value for any of `keys`.
@@ -199,7 +215,7 @@ enum WhoisResponse {
             guard keys.contains(name) else { continue }
 
             let value = parts[1].trimmingCharacters(in: .whitespaces)
-            if !value.isEmpty { found.append(value) }
+            if !value.isEmpty, !isRedacted(value) { found.append(value) }
         }
         return found
     }

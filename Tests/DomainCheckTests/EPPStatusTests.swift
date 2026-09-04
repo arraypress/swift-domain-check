@@ -125,3 +125,32 @@ final class CRLFRecordTests: XCTestCase {
         XCTAssertEqual(WhoisResponse.referralServer(in: record), "whois.namecheap.com")
     }
 }
+
+final class RedactionTests: XCTestCase {
+
+    func testAPlaceholderIsNotData() {
+        // Since GDPR most registries answer identifier fields with a literal
+        // "REDACTED FOR PRIVACY". Reporting that as the registry ID is worse
+        // than reporting nothing — it looks like data, so a caller stores it,
+        // compares it, and eventually acts on it.
+        XCTAssertTrue(WhoisResponse.isRedacted("REDACTED"))
+        XCTAssertTrue(WhoisResponse.isRedacted("REDACTED FOR PRIVACY"))
+        XCTAssertTrue(WhoisResponse.isRedacted("Not Disclosed"))
+        XCTAssertTrue(WhoisResponse.isRedacted("n/a"))
+        XCTAssertFalse(WhoisResponse.isRedacted("NameCheap, Inc."))
+        XCTAssertFalse(WhoisResponse.isRedacted("1264983250_DOMAIN_COM-VRSN"))
+    }
+
+    func testARedactedFieldComesBackNilNotAsThePlaceholder() {
+        let record = [
+            "Domain Name: example.io",
+            "Registry Domain ID: REDACTED FOR PRIVACY",
+            "Registrar: NameCheap, Inc.",
+            "Creation Date: 2011-11-22T01:38:41Z",
+            "",
+        ].joined(separator: "\r\n")
+        let status = WhoisResponse.status(from: record, domain: "example.io", server: "s")
+        XCTAssertNil(status.registryID)
+        XCTAssertEqual(status.registrar, "NameCheap, Inc.")
+    }
+}

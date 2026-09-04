@@ -34,6 +34,10 @@ camelCase form with an explanatory URL after it. Both come back as
 `clientTransferProhibited`, because a caller matching one spelling would
 silently miss every domain answered by the other protocol.
 
+A registry's "REDACTED FOR PRIVACY" comes back as `nil`, not as that string.
+It looks like data, so a caller stores it, compares it, and eventually acts on
+it.
+
 `keepRecord` is off by default: RDAP bodies are several kilobytes each, and a
 run over a hundred candidate names does not want a hundred of them.
 
