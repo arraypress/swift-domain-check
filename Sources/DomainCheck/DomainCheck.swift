@@ -58,6 +58,12 @@ public enum DomainCheck {
         /// How many times to retry after a `429`.
         public var maxRetries: Int
 
+        /// Whether to keep the record the source sent, verbatim.
+        ///
+        /// Off by default: RDAP bodies are several kilobytes each and a run
+        /// over a hundred candidate names does not want a hundred of them.
+        public var keepRecord: Bool
+
         /// Whether to fall back to WHOIS for TLDs with no RDAP service.
         ///
         /// Turning this off makes a run faster and entirely structured, at the
@@ -77,6 +83,7 @@ public enum DomainCheck {
             perRegistryInterval: TimeInterval = 0.35,
             maxRetries: Int = 2,
             useWhois: Bool = true,
+            keepRecord: Bool = false,
             bootstrapProvider: (@Sendable () async throws -> Data)? = nil
         ) {
             self.timeout = timeout
@@ -84,6 +91,7 @@ public enum DomainCheck {
             self.perRegistryInterval = perRegistryInterval
             self.maxRetries = maxRetries
             self.useWhois = useWhois
+            self.keepRecord = keepRecord
             self.bootstrapProvider = bootstrapProvider ?? Configuration.fetchBootstrap
         }
 
@@ -253,7 +261,7 @@ public enum DomainCheck {
 
             switch http.statusCode {
             case 200:
-                return RDAPResponse.status(from: data, domain: domain)
+                return RDAPResponse.status(from: data, domain: domain, keepingRecord: configuration.keepRecord)
 
             case 404:
                 // Authoritative: this registry has no record of the name.
@@ -292,7 +300,7 @@ public enum DomainCheck {
 
             await throttle.reserve(server)
             let response = try await WhoisClient.query(domain, server: server, timeout: configuration.timeout)
-            let status = WhoisResponse.status(from: response, domain: domain, server: server)
+            let status = WhoisResponse.status(from: response, domain: domain, server: server, keepingRecord: configuration.keepRecord)
 
             // Thin registries confirm existence but hold no dates or registrar
             // name; those live with the registrar it refers us to. Only worth a
@@ -313,7 +321,7 @@ public enum DomainCheck {
 
             return WhoisResponse.merging(
                 registry: status,
-                registrar: WhoisResponse.status(from: detail, domain: domain, server: referral)
+                registrar: WhoisResponse.status(from: detail, domain: domain, server: referral, keepingRecord: configuration.keepRecord)
             )
         } catch {
             return DomainStatus(

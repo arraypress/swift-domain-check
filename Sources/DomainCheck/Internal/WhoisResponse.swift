@@ -59,7 +59,7 @@ enum WhoisResponse {
     // MARK: Interpretation
 
     /// Reads a raw WHOIS body.
-    static func status(from response: String, domain: String, server: String) -> DomainStatus {
+    static func status(from response: String, domain: String, server: String, keepingRecord: Bool = false) -> DomainStatus {
         // Comment lines carry legal boilerplate that frequently contains the very
         // phrases being matched — "No match" appears in more than one registry's
         // preamble. Strip them before deciding anything.
@@ -95,7 +95,17 @@ enum WhoisResponse {
             registrar: value(in: body, keys: ["registrar", "sponsoring registrar"]),
             nameservers: values(in: body, keys: ["name server", "nserver"])
                 .map { $0.lowercased().split(separator: " ").first.map(String.init) ?? $0.lowercased() }
-                .sorted()
+                .sorted(),
+            statuses: EPPStatus.normalise(values(in: body, keys: ["domain status", "status", "state"])),
+            updated: date(in: body, keys: ["updated date", "last updated", "changed", "modified"]),
+            dnssec: value(in: body, keys: ["dnssec"]).map {
+                /// Registries write "signedDelegation", "yes" or "Signed" for
+                /// a signed zone and "unsigned" or "no" for an unsigned one.
+                let answer = $0.lowercased()
+                return !(answer.hasPrefix("unsigned") || answer.hasPrefix("no"))
+            },
+            registryID: value(in: body, keys: ["registry domain id", "domain id"]),
+            record: keepingRecord ? response : nil
         )
     }
 
@@ -139,6 +149,17 @@ enum WhoisResponse {
             expires: registry.expires ?? detail.expires,
             registrar: registry.registrar ?? detail.registrar,
             nameservers: registry.nameservers.isEmpty ? detail.nameservers : registry.nameservers,
+            statuses: registry.statuses.isEmpty ? detail.statuses : registry.statuses,
+            updated: registry.updated ?? detail.updated,
+            dnssec: registry.dnssec ?? detail.dnssec,
+            registryID: registry.registryID ?? detail.registryID,
+            /// Both, labelled: the registry record and the registrar's are
+            /// different documents, and a caller reading a record wants to
+            /// know which server said what.
+            record: {
+                let both = [registry.record, detail.record].compactMap { $0 }
+                return both.isEmpty ? nil : both.joined(separator: "\n\n")
+            }(),
             reason: registry.reason
         )
     }

@@ -72,6 +72,29 @@ public struct DomainStatus: Codable, Sendable, Equatable, Identifiable {
     /// Delegated nameservers, when reported.
     public let nameservers: [String]
 
+    /// EPP status codes, e.g. `clientTransferProhibited`, `pendingDelete`.
+    ///
+    /// Normalised to the EPP spelling whichever source answered. RDAP emits
+    /// them space-separated and lowercase — "client transfer prohibited" —
+    /// while WHOIS emits the camelCase form, and a caller matching on one
+    /// spelling would silently miss half the internet.
+    public let statuses: [String]
+
+    /// When the registration was last changed, when reported.
+    public let updated: Date?
+
+    /// Whether the zone is DNSSEC-signed, when reported.
+    public let dnssec: Bool?
+
+    /// The registry's own identifier for the registration.
+    public let registryID: String?
+
+    /// The record as the source sent it.
+    ///
+    /// Only populated when asked for: RDAP bodies are large and a caller
+    /// checking a hundred names does not want a hundred of them.
+    public let record: String?
+
     /// Why the answer is ``Availability/unknown``, when it is.
     public let reason: String?
 
@@ -83,6 +106,11 @@ public struct DomainStatus: Codable, Sendable, Equatable, Identifiable {
         expires: Date? = nil,
         registrar: String? = nil,
         nameservers: [String] = [],
+        statuses: [String] = [],
+        updated: Date? = nil,
+        dnssec: Bool? = nil,
+        registryID: String? = nil,
+        record: String? = nil,
         reason: String? = nil
     ) {
         self.domain = domain
@@ -92,7 +120,28 @@ public struct DomainStatus: Codable, Sendable, Equatable, Identifiable {
         self.expires = expires
         self.registrar = registrar
         self.nameservers = nameservers
+        self.statuses = statuses
+        self.updated = updated
+        self.dnssec = dnssec
+        self.registryID = registryID
+        self.record = record
         self.reason = reason
+    }
+
+    /// Whether the registrar or registry has locked the name against
+    /// transfer, which is the status a caller planning a move needs.
+    public var isLocked: Bool {
+        statuses.contains { $0.lowercased().contains("transferprohibited") }
+    }
+
+    /// Whether the registration has lapsed and is in a grace, redemption or
+    /// pending-delete window — the only states in which a taken name is
+    /// about to become available.
+    public var isLapsing: Bool {
+        let lapsing = ["redemptionperiod", "pendingdelete", "autorenewperiod", "renewperiod"]
+        return statuses.contains { status in
+            lapsing.contains(status.lowercased())
+        }
     }
 
     /// Days until expiry, when known.

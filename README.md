@@ -20,6 +20,23 @@ for try await status in DomainCheck.check(["a.com", "b.dev", "c.io"]) {
 - ❓ **An honest `unknown`** — never a guess
 - 🔑 **No credentials** · Swift 6 · pure Foundation, Linux-friendly
 
+## The record, not just the verdict
+
+`DomainStatus` carries what the registry actually said: `registrar`,
+`registered`, `expires`, `updated`, `nameservers`, `statuses`, `dnssec`,
+`registryID` — and, with `keepRecord: true`, the source's own document.
+`isLocked` and `isLapsing` answer the two questions worth asking of a taken
+name: can it be transferred, and is it about to fall free.
+
+**Status codes are normalised.** RDAP publishes them space-separated and
+lowercase — `"client transfer prohibited"` — while WHOIS publishes the EPP
+camelCase form with an explanatory URL after it. Both come back as
+`clientTransferProhibited`, because a caller matching one spelling would
+silently miss every domain answered by the other protocol.
+
+`keepRecord` is off by default: RDAP bodies are several kilobytes each, and a
+run over a hundred candidate names does not want a hundred of them.
+
 ## Installation
 
 ```swift

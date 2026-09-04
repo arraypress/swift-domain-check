@@ -18,11 +18,12 @@ enum RDAPResponse {
     /// and several redact contact data entirely. A missing field is normal, not
     /// an error — the availability verdict comes from the HTTP status, not from
     /// what the body happens to contain.
-    static func status(from data: Data, domain: String) -> DomainStatus {
+    static func status(from data: Data, domain: String, keepingRecord: Bool = false) -> DomainStatus {
         let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
 
         var registered: Date?
         var expires: Date?
+        var updated: Date?
         for event in root["events"] as? [[String: Any]] ?? [] {
             guard let action = event["eventAction"] as? String,
                   let dateString = event["eventDate"] as? String,
@@ -30,6 +31,9 @@ enum RDAPResponse {
             switch action {
             case "registration": registered = date
             case "expiration": expires = date
+            /// Not "last update of RDAP database", which is when the registry
+            /// last rebuilt its index and says nothing about the domain.
+            case "last changed": updated = date
             default: break
             }
         }
@@ -41,8 +45,25 @@ enum RDAPResponse {
             registered: registered,
             expires: expires,
             registrar: registrar(in: root),
-            nameservers: nameservers(in: root)
+            nameservers: nameservers(in: root),
+            statuses: EPPStatus.normalise(root["status"] as? [String] ?? []),
+            updated: updated,
+            dnssec: (root["secureDNS"] as? [String: Any])?["delegationSigned"] as? Bool,
+            registryID: root["handle"] as? String,
+            record: keepingRecord ? pretty(data) : nil
         )
+    }
+
+    /// The body, re-encoded readably.
+    ///
+    /// Registries send RDAP minified, and a wall of JSON on one line is not a
+    /// record anybody can read.
+    private static func pretty(_ data: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: data),
+              let formatted = try? JSONSerialization.data(
+                withJSONObject: object, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        else { return String(data: data, encoding: .utf8) }
+        return String(data: formatted, encoding: .utf8)
     }
 
     // MARK: Fields
