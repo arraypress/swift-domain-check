@@ -60,7 +60,9 @@ enum WhoisClient {
     /// far from universal, and guessing wrong yields no answer at all.
     static func serverForTLD(_ tld: String, timeout: TimeInterval) async throws(DomainCheckError) -> String? {
         let response = try await query(tld, server: ianaServer, timeout: timeout)
-        for line in response.split(separator: "\n") {
+        /// `isNewline`, not "\n": WHOIS is CRLF-terminated and Swift treats
+        /// "\r\n" as one Character, so splitting on "\n" matches nothing.
+        for line in response.split(whereSeparator: \.isNewline) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard trimmed.lowercased().hasPrefix("whois:") else { continue }
             let value = trimmed.dropFirst("whois:".count).trimmingCharacters(in: .whitespaces)

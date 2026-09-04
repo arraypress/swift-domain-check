@@ -63,8 +63,15 @@ enum WhoisResponse {
         // Comment lines carry legal boilerplate that frequently contains the very
         // phrases being matched — "No match" appears in more than one registry's
         // preamble. Strip them before deciding anything.
+        //
+        // `isNewline`, NOT `split(separator: "\n")`. WHOIS is CRLF-terminated
+        // by RFC 3912, and Swift treats "\r\n" as ONE Character — so splitting
+        // on "\n" matches nothing at all and hands the whole document back as a
+        // single line. Every field then parses to nil, and the record still
+        // looks registered, so the failure is completely silent. That is what
+        // .io, .sh and every other WHOIS-only TLD had been doing.
         let body = response
-            .split(separator: "\n", omittingEmptySubsequences: false)
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
             .filter { line in
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
                 return !trimmed.hasPrefix("%") && !trimmed.hasPrefix("#") && !trimmed.hasPrefix(">>>")
@@ -118,7 +125,7 @@ enum WhoisResponse {
     /// registrar. Without following the referral, a `.io` lookup reports
     /// "registered" and nothing else, which is true but not useful.
     static func referralServer(in response: String) -> String? {
-        for line in response.split(separator: "\n") {
+        for line in response.split(whereSeparator: \.isNewline) {
             let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2 else { continue }
 
@@ -168,7 +175,7 @@ enum WhoisResponse {
 
     /// The first value for any of `keys`, matched case-insensitively.
     static func value(in body: String, keys: [String]) -> String? {
-        for line in body.split(separator: "\n") {
+        for line in body.split(whereSeparator: \.isNewline) {
             let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2 else { continue }
 
@@ -184,7 +191,7 @@ enum WhoisResponse {
     /// Every value for any of `keys`.
     static func values(in body: String, keys: [String]) -> [String] {
         var found: [String] = []
-        for line in body.split(separator: "\n") {
+        for line in body.split(whereSeparator: \.isNewline) {
             let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2 else { continue }
 
