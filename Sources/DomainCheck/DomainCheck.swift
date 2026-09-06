@@ -382,4 +382,53 @@ public enum DomainCheck {
     static func tld(of domain: String) -> String {
         domain.split(separator: ".").last.map(String.init) ?? ""
     }
+
+    // MARK: - DNS
+
+    /// What the DNS holds for a name.
+    ///
+    /// Asked of the system resolver — the same one every other process on
+    /// the machine uses — so the answer is what the machine would act on,
+    /// cache and search domains included, rather than what a public resolver
+    /// somewhere else would say.
+    ///
+    /// - Parameters:
+    ///   - domain: The name to look up.
+    ///   - types: Which records to ask for. The common five by default.
+    ///   - timeout: How long to wait per record type.
+    /// - Returns: The values found, by type. A type with no records is
+    ///   present and empty rather than missing, so a caller can tell "asked
+    ///   and there are none" from "never asked".
+    public static func records(
+        for domain: String,
+        types: [DNSRecordType] = DNSRecordType.common,
+        timeout: TimeInterval = 3
+    ) -> DNSRecords {
+        var found: [String: [String]] = [:]
+        for type in types {
+            found[type.label] = DNSResolver.query(domain, type: type, timeout: timeout)
+        }
+        return DNSRecords(domain: domain, records: found)
+    }
+
+    // MARK: - Certificates
+
+    /// The certificate a host presents.
+    ///
+    /// Read from the handshake before the system decides whether to trust
+    /// it, so an expired or self-signed certificate is described rather than
+    /// refused — which is the case somebody most needs told about.
+    ///
+    /// - Parameters:
+    ///   - host: The host to connect to.
+    ///   - port: The port. 443 unless told otherwise.
+    ///   - timeout: How long to wait for the handshake.
+    /// - Returns: The certificate, or nil when the host presented none.
+    public static func certificate(
+        for host: String,
+        port: UInt16 = 443,
+        timeout: TimeInterval = 8
+    ) async -> Certificate? {
+        await CertificateReader.read(host: host, port: port, timeout: timeout)
+    }
 }
